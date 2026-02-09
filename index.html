@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Opalgas - Drive Folder CRUD</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body class="bg-slate-50 min-h-screen p-4 md:p-10 font-sans text-slate-900">
+
+    <div class="max-w-2xl mx-auto bg-white rounded-[2.5rem] shadow-2xl border border-slate-100 overflow-hidden">
+        <!-- Header -->
+        <div class="bg-indigo-600 p-8 text-white text-center">
+            <h1 class="text-3xl font-bold mb-2">Opalgas Workspace Manager</h1>
+            <p class="text-indigo-100 italic text-sm">Automasi File di Dalam Folder Khusus</p>
+        </div>
+
+        <div class="p-8">
+            <!-- Auth Section -->
+            <div id="auth_section" class="mb-10 text-center">
+                <button onclick="handleAuthClick()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 px-10 rounded-2xl transition-all shadow-lg active:scale-95 flex items-center gap-3 mx-auto">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"></path></svg>
+                    Hubungkan ke Google Drive
+                </button>
+            </div>
+
+            <!-- Control Panel (Hidden until login) -->
+            <div id="control_panel" class="hidden space-y-6">
+                
+                <!-- STEP 1: FOLDER GENERATION (MANDATORY) -->
+                <div class="p-6 bg-blue-50 border border-blue-100 rounded-3xl">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="font-bold text-blue-900 uppercase text-xs tracking-widest">Tahap 1: Inisialisasi</h2>
+                        <span id="folder_status" class="px-3 py-1 bg-blue-200 text-blue-700 rounded-full text-[10px] font-bold">BELUM ADA FOLDER</span>
+                    </div>
+                    <button onclick="buatFolderInduk()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-2xl transition-all shadow-md active:scale-95">
+                        Buat Folder "Opalgas-Workspace"
+                    </button>
+                </div>
+
+                <!-- STEP 2: FILE OPERATIONS (LOCKED UNTIL FOLDER CREATED) -->
+                <div id="file_ops" class="opacity-40 pointer-events-none transition-all duration-500 space-y-4">
+                    <h2 class="font-bold text-slate-400 uppercase text-xs tracking-widest px-2">Tahap 2: Operasi File di Dalam Folder</h2>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <button onclick="buatFile('sheet')" class="flex items-center justify-between p-5 bg-white border border-slate-200 rounded-2xl hover:border-green-500 hover:bg-green-50 transition-all group">
+                            <span class="font-bold text-slate-700">Tambah Sheet</span>
+                            <span class="text-green-600 bg-green-100 p-2 rounded-xl group-hover:bg-green-600 group-hover:text-white">Excel</span>
+                        </button>
+
+                        <button onclick="buatFile('doc')" class="flex items-center justify-between p-5 bg-white border border-slate-200 rounded-2xl hover:border-indigo-500 hover:bg-indigo-50 transition-all group">
+                            <span class="font-bold text-slate-700">Tambah Doc</span>
+                            <span class="text-indigo-600 bg-indigo-100 p-2 rounded-xl group-hover:bg-indigo-600 group-hover:text-white">Word</span>
+                        </button>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <button onclick="updateFileTerakhir()" class="p-4 bg-amber-50 border border-amber-200 text-amber-700 rounded-2xl font-bold hover:bg-amber-100 transition-all">
+                            Rename File Terakhir
+                        </button>
+                        <button onclick="hapusFileTerakhir()" class="p-4 bg-red-50 border border-red-200 text-red-600 rounded-2xl font-bold hover:bg-red-600 hover:text-white transition-all">
+                            Hapus File Terakhir
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Console Log -->
+            <div class="mt-10">
+                <div class="flex justify-between items-center mb-3">
+                    <h3 class="text-[10px] font-black text-slate-400 uppercase tracking-tighter">System Terminal Log</h3>
+                    <button onclick="document.getElementById('log_box').innerHTML = '> Terminal dibersihkan...'" class="text-[10px] text-indigo-500 font-bold hover:underline">Clear</button>
+                </div>
+                <div id="log_box" class="bg-slate-900 rounded-[1.5rem] p-6 font-mono text-[11px] text-emerald-400 h-56 overflow-y-auto shadow-inner leading-relaxed">
+                    > Menunggu otentikasi Google...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // GANTI DENGAN CLIENT ID ANDA
+        const CLIENT_ID = '16352551071-3v31b6irthqrefa7re3hpbn7peh6rile.apps.googleusercontent.com';
+      //16352551071-3v31b6irthqrefa7re3hpbn7peh6rile.apps.googleusercontent.com
+        const SCOPES = 'https://www.googleapis.com/auth/drive.file';
+
+        let accessToken = null;
+        let parentFolderId = null; // ID Folder Induk
+        let lastCreatedFileId = null; // ID File terakhir yang dibuat di dalam folder
+
+        function log(msg, color = 'text-emerald-400') {
+            const box = document.getElementById('log_box');
+            const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            box.innerHTML += `<div class="mb-1 ${color}"><span class="opacity-30">[${time}]</span> ${msg}</div>`;
+            box.scrollTop = box.scrollHeight;
+        }
+
+        function handleAuthClick() {
+            if (CLIENT_ID.includes('MASUKKAN')) {
+                alert("Harap isi Client ID terlebih dahulu di kode!"); return;
+            }
+            const client = google.accounts.oauth2.initTokenClient({
+                client_id: CLIENT_ID,
+                scope: SCOPES,
+                callback: (res) => {
+                    if (res.access_token) {
+                        accessToken = res.access_token;
+                        document.getElementById('auth_section').classList.add('hidden');
+                        document.getElementById('control_panel').classList.remove('hidden');
+                        log("SISTEM: Login Berhasil. Token diperoleh.");
+                    }
+                },
+            });
+            client.requestAccessToken({prompt: 'consent'});
+        }
+
+        async function buatFolderInduk() {
+            log("MEMPROSES: Menciptakan Folder Induk...");
+            const res = await apiDrive('', 'POST', { 
+                name: 'Opalgas-Workspace-Root', 
+                mimeType: 'application/vnd.google-apps.folder' 
+            });
+
+            if(res.id) { 
+                parentFolderId = res.id;
+                document.getElementById('folder_status').innerText = "FOLDER READY";
+                document.getElementById('folder_status').className = "px-3 py-1 bg-green-200 text-green-700 rounded-full text-[10px] font-bold";
+                document.getElementById('file_ops').classList.remove('opacity-40', 'pointer-events-none');
+                log(`SUKSES: Folder Induk dibuat (ID: ${res.id})`, "text-blue-400"); 
+            }
+        }
+
+        async function buatFile(type) {
+            if(!parentFolderId) return;
+            
+            const name = type === 'sheet' ? 'Data-Sheet-Opalgas' : 'Dokumen-Narasi-Opalgas';
+            const mime = type === 'sheet' ? 'application/vnd.google-apps.spreadsheet' : 'application/vnd.google-apps.document';
+            
+            log(`MEMPROSES: Membuat ${type} di dalam folder...`);
+            
+            const res = await apiDrive('', 'POST', { 
+                name: name, 
+                mimeType: mime,
+                parents: [parentFolderId] // KUNCI UTAMA: Memasukkan file ke dalam folder
+            });
+
+            if(res.id) { 
+                lastCreatedFileId = res.id;
+                log(`SUKSES: ${type} berhasil disimpan di folder induk.`, "text-green-400"); 
+            }
+        }
+
+        async function updateFileTerakhir() {
+            if(!lastCreatedFileId) { log("ERROR: Tidak ada file untuk di-rename!", "text-red-400"); return; }
+            
+            log("MEMPROSES: Update nama file terakhir...");
+            const res = await apiDrive(`/${lastCreatedFileId}`, 'PATCH', { 
+                name: 'REVISI-FILE-OPALGAS-' + Math.floor(Math.random() * 100) 
+            });
+
+            if(res.id) log("SUKSES: Nama file berhasil diubah di Drive.", "text-amber-400");
+        }
+
+        async function hapusFileTerakhir() {
+            if(!lastCreatedFileId) { log("ERROR: Tidak ada file untuk dihapus!", "text-red-400"); return; }
+            
+            log("MEMPROSES: Membuang file ke Trash...");
+            const res = await apiDrive(`/${lastCreatedFileId}`, 'PATCH', { trashed: true });
+            
+            if(res.id) {
+                log("SUKSES: File telah dipindahkan ke Bin/Trash.", "text-red-400");
+                lastCreatedFileId = null;
+            }
+        }
+
+        // Fungsi Universal Fetch API Drive
+        async function apiDrive(path, method, body) {
+            try {
+                const response = await fetch(`https://www.googleapis.com/drive/v3/files${path}`, {
+                    method: method,
+                    headers: { 
+                        'Authorization': `Bearer ${accessToken}`, 
+                        'Content-Type': 'application/json' 
+                    },
+                    body: body ? JSON.stringify(body) : null
+                });
+                return await response.json();
+            } catch (e) {
+                log("API ERROR: " + e.message, "text-red-500");
+                return {};
+            }
+        }
+    </script>
+</body>
+</html>
