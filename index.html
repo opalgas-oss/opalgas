@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Opalgas - Super Test Access</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body class="bg-slate-50 min-h-screen p-4 md:p-10 font-sans">
+
+    <div class="max-w-2xl mx-auto bg-white rounded-[2.5rem] shadow-2xl border border-slate-100 overflow-hidden">
+        <!-- Header -->
+        <div class="bg-blue-600 p-8 text-white text-center">
+            <h1 class="text-3xl font-bold mb-2">Opalgas Full Access Test</h1>
+            <p class="text-blue-100">Uji coba Create, Read, Update, & Delete (CRUD)</p>
+        </div>
+
+        <div class="p-8">
+            <!-- Auth Section -->
+            <div id="auth_section" class="mb-10 text-center">
+                <button onclick="handleAuthClick()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-10 rounded-2xl transition-all shadow-lg active:scale-95">
+                    Hubungkan ke Google Drive
+                </button>
+            </div>
+
+            <!-- Control Panel (Hidden until login) -->
+            <div id="control_panel" class="hidden space-y-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- CREATE -->
+                    <button onclick="buatFolder()" class="flex items-center justify-between p-4 bg-slate-50 border border-slate-200 rounded-2xl hover:bg-blue-50 transition-colors group">
+                        <span class="font-semibold text-slate-700">1. Buat Folder Baru</span>
+                        <span class="bg-blue-100 text-blue-600 p-2 rounded-lg group-hover:bg-blue-600 group-hover:text-white">New</span>
+                    </button>
+
+                    <button onclick="buatFile('sheet')" class="flex items-center justify-between p-4 bg-slate-50 border border-slate-200 rounded-2xl hover:bg-green-50 transition-colors group">
+                        <span class="font-semibold text-slate-700">2. Buat Google Sheets</span>
+                        <span class="bg-green-100 text-green-600 p-2 rounded-lg">Sheet</span>
+                    </button>
+
+                    <button onclick="buatFile('doc')" class="flex items-center justify-between p-4 bg-slate-50 border border-slate-200 rounded-2xl hover:bg-indigo-50 transition-colors group">
+                        <span class="font-semibold text-slate-700">3. Buat Google Docs</span>
+                        <span class="bg-indigo-100 text-indigo-600 p-2 rounded-lg">Doc</span>
+                    </button>
+
+                    <!-- UPDATE & DELETE -->
+                    <button onclick="updateFileTerakhir()" class="flex items-center justify-between p-4 bg-slate-50 border border-slate-200 rounded-2xl hover:bg-amber-50 transition-colors group">
+                        <span class="font-semibold text-slate-700">4. Ganti Nama Terakhir</span>
+                        <span class="bg-amber-100 text-amber-600 p-2 rounded-lg">Edit</span>
+                    </button>
+                </div>
+
+                <button onclick="hapusFileTerakhir()" class="w-full mt-4 p-4 bg-red-50 border border-red-100 text-red-600 rounded-2xl font-bold hover:bg-red-600 hover:text-white transition-all">
+                    5. Hapus File Terakhir (Trash)
+                </button>
+            </div>
+
+            <!-- Console / Log -->
+            <div class="mt-10">
+                <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Status Aktivitas</h3>
+                <div id="log_box" class="bg-slate-900 rounded-2xl p-5 font-mono text-xs text-blue-400 h-48 overflow-y-auto shadow-inner">
+                    > Sistem Menunggu Koneksi...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // MASUKKAN CLIENT ID ANDA DI SINI
+        const CLIENT_ID = '16352551071-3v31b6irthqrefa7re3hpbn7peh6rile.apps.googleusercontent.com';
+        const SCOPES = 'https://www.googleapis.com/auth/drive.file';
+
+        let accessToken = null;
+        let lastCreatedFileId = null;
+
+        function log(msg, color = 'text-blue-400') {
+            const box = document.getElementById('log_box');
+            box.innerHTML += `<br><span class="${color}">> ${msg}</span>`;
+            box.scrollTop = box.scrollHeight;
+        }
+
+        function handleAuthClick() {
+            if (CLIENT_ID.includes('MASUKKAN')) {
+                alert("Client ID belum diisi!"); return;
+            }
+            const client = google.accounts.oauth2.initTokenClient({
+                client_id: CLIENT_ID,
+                scope: SCOPES,
+                callback: (res) => {
+                    if (res.access_token) {
+                        accessToken = res.access_token;
+                        document.getElementById('auth_section').classList.add('hidden');
+                        document.getElementById('control_panel').classList.remove('hidden');
+                        log("LOGIN BERHASIL: Akses Drive Diberikan.");
+                    }
+                },
+            });
+            client.requestAccessToken({prompt: 'consent'});
+        }
+
+        async function buatFolder() {
+            log("Memproses: Membuat Folder...");
+            const res = await apiDrive('', 'POST', { name: 'Opalgas-Folder-Induk', mimeType: 'application/vnd.google-apps.folder' });
+            if(res.id) { log("SUKSES: Folder dibuat ID: " + res.id, "text-green-400"); lastCreatedFileId = res.id; }
+        }
+
+        async function buatFile(type) {
+            const name = type === 'sheet' ? 'Opalgas-Data-Sheet' : 'Opalgas-Dokumen-Baru';
+            const mime = type === 'sheet' ? 'application/vnd.google-apps.spreadsheet' : 'application/vnd.google-apps.document';
+            log(`Memproses: Membuat ${type}...`);
+            const res = await apiDrive('', 'POST', { name: name, mimeType: mime });
+            if(res.id) { log(`SUKSES: ${type} dibuat.`, "text-green-400"); lastCreatedFileId = res.id; }
+        }
+
+        async function updateFileTerakhir() {
+            if(!lastCreatedFileId) { alert("Buat file dulu!"); return; }
+            log("Memproses: Mengubah Nama...");
+            const res = await apiDrive(`/${lastCreatedFileId}`, 'PATCH', { name: 'Opalgas-SUDAH-DIEDIT' });
+            if(res.id) log("SUKSES: Nama file berhasil diubah!", "text-amber-400");
+        }
+
+        async function hapusFileTerakhir() {
+            if(!lastCreatedFileId) { alert("Tidak ada file untuk dihapus!"); return; }
+            log("Memproses: Menghapus File...");
+            const res = await apiDrive(`/${lastCreatedFileId}`, 'PATCH', { trashed: true });
+            if(res.id) log("SUKSES: File dipindahkan ke tempat sampah.", "text-red-400");
+            lastCreatedFileId = null;
+        }
+
+        // Fungsi bantu untuk memanggil API Google Drive
+        async function apiDrive(path, method, body) {
+            try {
+                const response = await fetch(`https://www.googleapis.com/drive/v3/files${path}`, {
+                    method: method,
+                    headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+                    body: body ? JSON.stringify(body) : null
+                });
+                return await response.json();
+            } catch (e) {
+                log("Error: " + e.message, "text-red-500");
+                return {};
+            }
+        }
+    </script>
+</body>
+</html>
